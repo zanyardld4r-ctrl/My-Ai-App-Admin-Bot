@@ -6,3 +6,7 @@
   startCommand = "npm start"
   restartPolicyType = "ALWAYS"
   numReplicas = 1
+
+[service]
+  healthcheckPath = "/"
+  healthcheckTimeout = 10
