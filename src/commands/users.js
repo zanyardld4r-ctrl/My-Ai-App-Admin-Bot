@@ -11,12 +11,10 @@ const {
 } = require('../services/supabase');
 const BADINI = require('../i18n/badini');
 const { withAdmin } = require('../middleware/auth');
-const logger = require('../utils/logger');
 
-// /users - List users
 async function handleUsers(bot, msg, match) {
   const chatId = msg.chat.id;
-  const page = match && match[1] ? parseInt(match[1]) : 1;
+  const page = match && match[1] ? parseInt(match[1], 10) : 1;
 
   const result = await getUsers(page, 10);
 
@@ -40,7 +38,6 @@ async function handleUsers(bot, msg, match) {
   bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
 }
 
-// /user <email> - Get specific user
 async function handleUser(bot, msg, match) {
   const chatId = msg.chat.id;
   const query = match && match[1] ? match[1].trim() : '';
@@ -64,11 +61,9 @@ async function handleUser(bot, msg, match) {
     .replace('{id}', user.user_id)
     .replace('{plan}', user.subscription_status === 'pro' ? '⭐ پڕۆ' : '🆓 ئاسایی')
     .replace('{created}', new Date(user.created_at).toLocaleDateString('en-US'))
-    .replace('{generations}', '—')
     .replace('{todayGen}', user.daily_generations_count || 0)
-    .replace('{status}', user.banned ? BADINI.users.banned : BADINI.users.active);
+    .replace('{status}', BADINI.users.active);
 
-  // Action buttons
   const keyboard = {
     inline_keyboard: [
       [
@@ -91,13 +86,12 @@ async function handleUser(bot, msg, match) {
   });
 }
 
-// /search <query> - Search users
 async function handleSearch(bot, msg, match) {
   const chatId = msg.chat.id;
   const query = match && match[1] ? match[1].trim() : '';
 
   if (!query) {
-    return bot.sendMessage(chatId, '❌ تکایه‌ زانیارییه‌ک بنووسه‌ بۆ گه‌ڕان.', { parse_mode: 'Markdown' });
+    return bot.sendMessage(chatId, '❌ تکایە زانیارییەک بنووسە بۆ گەڕان.', { parse_mode: 'Markdown' });
   }
 
   const users = await searchUsers(query);
@@ -113,83 +107,94 @@ async function handleSearch(bot, msg, match) {
   bot.sendMessage(chatId, `🔍 *ئەنجامی گەڕان:*\n\n${usersList}`, { parse_mode: 'Markdown' });
 }
 
-// /ban <user_id>
 async function handleBan(bot, msg, match) {
   const chatId = msg.chat.id;
   const userId = match && match[1] ? match[1].trim() : '';
-  if (!userId) return bot.sendMessage(chatId, '❌ تکایه‌ ناسنامه‌ی به‌کارهێنه‌ر بنووسه‌.', { parse_mode: 'Markdown' });
+  if (!userId) return bot.sendMessage(chatId, '❌ تکایە ناسنامەی بەکارهێنەر بنووسە.', { parse_mode: 'Markdown' });
 
   const user = await getUserById(userId);
   if (!user) return bot.sendMessage(chatId, BADINI.users.notFound, { parse_mode: 'Markdown' });
 
   const success = await banUser(userId);
   if (success) {
-    bot.sendMessage(chatId, BADINI.notifications.userBanned.replace('{userId}', userId).replace('{name}', user.full_name || user.email), { parse_mode: 'Markdown' });
+    bot.sendMessage(
+      chatId,
+      BADINI.notifications.userBanned.replace('{userId}', userId).replace('{name}', user.full_name || user.email),
+      { parse_mode: 'Markdown' }
+    );
   } else {
     bot.sendMessage(chatId, BADINI.general.error, { parse_mode: 'Markdown' });
   }
 }
 
-// /unban <user_id>
 async function handleUnban(bot, msg, match) {
   const chatId = msg.chat.id;
   const userId = match && match[1] ? match[1].trim() : '';
-  if (!userId) return bot.sendMessage(chatId, '❌ تکایه‌ ناسنامه‌ی به‌کارهێنه‌ر بنووسه‌.', { parse_mode: 'Markdown' });
+  if (!userId) return bot.sendMessage(chatId, '❌ تکایە ناسنامەی بەکارهێنەر بنووسە.', { parse_mode: 'Markdown' });
 
   const user = await getUserById(userId);
   if (!user) return bot.sendMessage(chatId, BADINI.users.notFound, { parse_mode: 'Markdown' });
 
   const success = await unbanUser(userId);
   if (success) {
-    bot.sendMessage(chatId, BADINI.notifications.userUnbanned.replace('{userId}', userId).replace('{name}', user.full_name || user.email), { parse_mode: 'Markdown' });
+    bot.sendMessage(
+      chatId,
+      BADINI.notifications.userUnbanned.replace('{userId}', userId).replace('{name}', user.full_name || user.email),
+      { parse_mode: 'Markdown' }
+    );
   } else {
     bot.sendMessage(chatId, BADINI.general.error, { parse_mode: 'Markdown' });
   }
 }
 
-// /grant <user_id>
 async function handleGrant(bot, msg, match) {
   const chatId = msg.chat.id;
   const userId = match && match[1] ? match[1].trim() : '';
-  if (!userId) return bot.sendMessage(chatId, '❌ تکایه‌ ناسنامه‌ی به‌کارهێنه‌ر بنووسه‌.', { parse_mode: 'Markdown' });
+  if (!userId) return bot.sendMessage(chatId, '❌ تکایە ناسنامەی بەکارهێنەر بنووسە.', { parse_mode: 'Markdown' });
 
   const user = await getUserById(userId);
   if (!user) return bot.sendMessage(chatId, BADINI.users.notFound, { parse_mode: 'Markdown' });
 
   const success = await grantPremium(userId);
   if (success) {
-    bot.sendMessage(chatId, BADINI.notifications.premiumGranted.replace('{userId}', userId).replace('{name}', user.full_name || user.email), { parse_mode: 'Markdown' });
+    bot.sendMessage(
+      chatId,
+      BADINI.notifications.premiumGranted.replace('{userId}', userId).replace('{name}', user.full_name || user.email),
+      { parse_mode: 'Markdown' }
+    );
   } else {
     bot.sendMessage(chatId, BADINI.general.error, { parse_mode: 'Markdown' });
   }
 }
 
-// /revoke <user_id>
 async function handleRevoke(bot, msg, match) {
   const chatId = msg.chat.id;
   const userId = match && match[1] ? match[1].trim() : '';
-  if (!userId) return bot.sendMessage(chatId, '❌ تکایه‌ ناسنامه‌ی به‌کارهێنه‌ر بنووسه‌.', { parse_mode: 'Markdown' });
+  if (!userId) return bot.sendMessage(chatId, '❌ تکایە ناسنامەی بەکارهێنەر بنووسە.', { parse_mode: 'Markdown' });
 
   const user = await getUserById(userId);
   if (!user) return bot.sendMessage(chatId, BADINI.users.notFound, { parse_mode: 'Markdown' });
 
   const success = await revokePremium(userId);
   if (success) {
-    bot.sendMessage(chatId, BADINI.notifications.premiumRevoked.replace('{userId}', userId).replace('{name}', user.full_name || user.email), { parse_mode: 'Markdown' });
+    bot.sendMessage(
+      chatId,
+      BADINI.notifications.premiumRevoked.replace('{userId}', userId).replace('{name}', user.full_name || user.email),
+      { parse_mode: 'Markdown' }
+    );
   } else {
     bot.sendMessage(chatId, BADINI.general.error, { parse_mode: 'Markdown' });
   }
 }
 
-// /reset <user_id>
 async function handleReset(bot, msg, match) {
   const chatId = msg.chat.id;
   const userId = match && match[1] ? match[1].trim() : '';
-  if (!userId) return bot.sendMessage(chatId, '❌ تکایه‌ ناسنامه‌ی به‌کارهێنه‌ر بنووسه‌.', { parse_mode: 'Markdown' });
+  if (!userId) return bot.sendMessage(chatId, '❌ تکایە ناسنامەی بەکارهێنەر بنووسە.', { parse_mode: 'Markdown' });
 
   const success = await resetUserCredits(userId);
   if (success) {
-    bot.sendMessage(chatId, '✅ کرێدیتی به‌کارهێنه‌ر ڕێسێت کرا.', { parse_mode: 'Markdown' });
+    bot.sendMessage(chatId, '✅ کرێدیتی بەکارهێنەر ڕێسێت کرا.', { parse_mode: 'Markdown' });
   } else {
     bot.sendMessage(chatId, BADINI.general.error, { parse_mode: 'Markdown' });
   }
