@@ -5,7 +5,9 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  logger.error('Supabase credentials missing! Check .env file.');
+  logger.error('Supabase credentials missing! Check environment variables.');
+  logger.error(`SUPABASE_URL: ${supabaseUrl ? 'SET' : 'MISSING'}`);
+  logger.error(`SUPABASE_SERVICE_ROLE_KEY: ${supabaseServiceKey ? 'SET' : 'MISSING'}`);
   process.exit(1);
 }
 
@@ -16,12 +18,18 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   },
 });
 
-// Test connection on startup
+/**
+ * Test database connection on startup
+ * @returns {Promise<boolean>}
+ */
 async function testConnection() {
   try {
-    const { data, error } = await supabase.from('profiles').select('count', { count: 'exact', head: true });
+    const { count, error } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true });
+
     if (error) throw error;
-    logger.info('Supabase connection successful');
+    logger.info(`Supabase connected successfully. Profiles count: ${count}`);
     return true;
   } catch (error) {
     logger.error('Supabase connection failed:', error.message);
@@ -39,14 +47,13 @@ async function getStats() {
     today.setHours(0, 0, 0, 0);
 
     const [
-      { count: totalUsers },
-      { count: freeUsers },
-      { count: proUsers },
-      { count: totalGenerations },
-      { count: pendingPayments },
-      { count: todayGenerations },
-      { count: todayNewUsers },
-      { data: monthlyRevenue },
+      totalUsersResult,
+      freeUsersResult,
+      proUsersResult,
+      totalGenerationsResult,
+      pendingPaymentsResult,
+      todayGenerationsResult,
+      todayNewUsersResult,
     ] = await Promise.all([
       supabase.from('profiles').select('*', { count: 'exact', head: true }),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('subscription_status', 'free'),
@@ -55,20 +62,17 @@ async function getStats() {
       supabase.from('payment_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
       supabase.from('generations').select('*', { count: 'exact', head: true }).gte('created_at', today.toISOString()),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', today.toISOString()),
-      supabase.from('payment_requests').select('amount').eq('status', 'approved'),
     ]);
 
-    const revenue = monthlyRevenue?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
-
     return {
-      totalUsers: totalUsers || 0,
-      freeUsers: freeUsers || 0,
-      proUsers: proUsers || 0,
-      totalGenerations: totalGenerations || 0,
-      pendingPayments: pendingPayments || 0,
-      todayGenerations: todayGenerations || 0,
-      todayNewUsers: todayNewUsers || 0,
-      revenue: revenue.toFixed(2),
+      totalUsers: totalUsersResult.count || 0,
+      freeUsers: freeUsersResult.count || 0,
+      proUsers: proUsersResult.count || 0,
+      totalGenerations: totalGenerationsResult.count || 0,
+      pendingPayments: pendingPaymentsResult.count || 0,
+      todayGenerations: todayGenerationsResult.count || 0,
+      todayNewUsers: todayNewUsersResult.count || 0,
+      revenue: '0.00',
     };
   } catch (error) {
     logger.error('Get stats error:', error.message);
@@ -85,12 +89,13 @@ async function getUserByEmail(email) {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .ilike('email', email)
+      .ilike('email', `%${email}%`)
       .single();
-    if (error) return null;
-    return data;
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data || null;
   } catch (error) {
-    logger.error('Get user error:', error.message);
+    logger.error('Get user by email error:', error.message);
     return null;
   }
 }
@@ -102,8 +107,9 @@ async function getUserById(userId) {
       .select('*')
       .eq('user_id', userId)
       .single();
-    if (error) return null;
-    return data;
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data || null;
   } catch (error) {
     logger.error('Get user by ID error:', error.message);
     return null;
@@ -118,11 +124,18 @@ async function getUsers(page = 1, limit = 10) {
       .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
+
     if (error) throw error;
-    return { users: data, total: count, page, totalPages: Math.ceil(count / limit) };
+
+    return {
+      users: data || [],
+      total: count || 0,
+      page,
+      totalPages: Math.ceil((count || 0) / limit),
+    };
   } catch (error) {
     logger.error('Get users error:', error.message);
-    return null;
+    return { users: [], total: 0, page: 1, totalPages: 0 };
   }
 }
 
@@ -133,8 +146,9 @@ async function searchUsers(query) {
       .select('*')
       .or(`email.ilike.%${query}%,full_name.ilike.%${query}%`)
       .limit(10);
+
     if (error) throw error;
-    return data;
+    return data || [];
   } catch (error) {
     logger.error('Search users error:', error.message);
     return [];
@@ -144,9 +158,10 @@ async function searchUsers(query) {
 async function banUser(userId) {
   try {
     const { error } = await supabase.auth.admin.updateUserById(userId, {
-      ban_duration: '876600h', // 100 years effectively permanent
+      ban_duration: '876600h',
     });
     if (error) throw error;
+    logger.info(`User banned: ${userId}`);
     return true;
   } catch (error) {
     logger.error('Ban user error:', error.message);
@@ -160,6 +175,7 @@ async function unbanUser(userId) {
       ban_duration: '0h',
     });
     if (error) throw error;
+    logger.info(`User unbanned: ${userId}`);
     return true;
   } catch (error) {
     logger.error('Unban user error:', error.message);
@@ -171,9 +187,14 @@ async function grantPremium(userId) {
   try {
     const { error } = await supabase
       .from('profiles')
-      .update({ subscription_status: 'pro', updated_at: new Date().toISOString() })
+      .update({
+        subscription_status: 'pro',
+        updated_at: new Date().toISOString(),
+      })
       .eq('user_id', userId);
+
     if (error) throw error;
+    logger.info(`Premium granted to: ${userId}`);
     return true;
   } catch (error) {
     logger.error('Grant premium error:', error.message);
@@ -185,9 +206,14 @@ async function revokePremium(userId) {
   try {
     const { error } = await supabase
       .from('profiles')
-      .update({ subscription_status: 'free', updated_at: new Date().toISOString() })
+      .update({
+        subscription_status: 'free',
+        updated_at: new Date().toISOString(),
+      })
       .eq('user_id', userId);
+
     if (error) throw error;
+    logger.info(`Premium revoked from: ${userId}`);
     return true;
   } catch (error) {
     logger.error('Revoke premium error:', error.message);
@@ -199,9 +225,15 @@ async function resetUserCredits(userId) {
   try {
     const { error } = await supabase
       .from('profiles')
-      .update({ daily_generations_count: 0, last_reset_date: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .update({
+        daily_generations_count: 0,
+        last_reset_date: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
       .eq('user_id', userId);
+
     if (error) throw error;
+    logger.info(`Credits reset for: ${userId}`);
     return true;
   } catch (error) {
     logger.error('Reset credits error:', error.message);
@@ -217,12 +249,13 @@ async function getPendingPayments() {
   try {
     const { data, error } = await supabase
       .from('payment_requests')
-      .select('*, profiles!inner(full_name, email)')
+      .select('*')
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
       .limit(10);
+
     if (error) throw error;
-    return data;
+    return data || [];
   } catch (error) {
     logger.error('Get pending payments error:', error.message);
     return [];
@@ -233,13 +266,14 @@ async function getPaymentById(paymentId) {
   try {
     const { data, error } = await supabase
       .from('payment_requests')
-      .select('*, profiles!inner(full_name, email)')
+      .select('*')
       .eq('id', paymentId)
       .single();
-    if (error) return null;
-    return data;
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data || null;
   } catch (error) {
-    logger.error('Get payment error:', error.message);
+    logger.error('Get payment by ID error:', error.message);
     return null;
   }
 }
@@ -247,14 +281,17 @@ async function getPaymentById(paymentId) {
 async function approvePayment(paymentId) {
   try {
     const payment = await getPaymentById(paymentId);
-    if (!payment) return { success: false, error: 'Payment not found' };
-    if (payment.status !== 'pending') return { success: false, error: 'Already processed' };
+    if (!payment) return { success: false, error: 'پارەدان نەدۆزرایەوە' };
+    if (payment.status !== 'pending') return { success: false, error: 'پێشتر پێواژۆ کراوە' };
 
-    // Update payment status
-    await supabase.from('payment_requests').update({ status: 'approved', updated_at: new Date().toISOString() }).eq('id', paymentId);
-    // Grant premium to user
+    await supabase
+      .from('payment_requests')
+      .update({ status: 'approved', updated_at: new Date().toISOString() })
+      .eq('id', paymentId);
+
     await grantPremium(payment.user_id);
 
+    logger.info(`Payment approved: ${paymentId}`);
     return { success: true, payment };
   } catch (error) {
     logger.error('Approve payment error:', error.message);
@@ -265,54 +302,19 @@ async function approvePayment(paymentId) {
 async function rejectPayment(paymentId) {
   try {
     const payment = await getPaymentById(paymentId);
-    if (!payment) return { success: false, error: 'Payment not found' };
-    if (payment.status !== 'pending') return { success: false, error: 'Already processed' };
+    if (!payment) return { success: false, error: 'پارەدان نەدۆزرایەوە' };
+    if (payment.status !== 'pending') return { success: false, error: 'پێشتر پێواژۆ کراوە' };
 
-    await supabase.from('payment_requests').update({ status: 'rejected', updated_at: new Date().toISOString() }).eq('id', paymentId);
+    await supabase
+      .from('payment_requests')
+      .update({ status: 'rejected', updated_at: new Date().toISOString() })
+      .eq('id', paymentId);
+
+    logger.info(`Payment rejected: ${paymentId}`);
     return { success: true, payment };
   } catch (error) {
     logger.error('Reject payment error:', error.message);
     return { success: false, error: error.message };
-  }
-}
-
-// ============================================
-// NOTIFICATION FUNCTIONS
-// ============================================
-
-async function getInactiveUsers(days = 7) {
-  try {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    const { data, error } = await supabase
-      .from('generations')
-      .select('user_id, profiles!inner(email, full_name)')
-      .lt('created_at', cutoff.toISOString())
-      .limit(10);
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    logger.error('Get inactive users error:', error.message);
-    return [];
-  }
-}
-
-async function getHighUsageUsers(threshold = 50) {
-  try {
-    const today = new Date();
-    today.setDate(1);
-    today.setHours(0, 0, 0, 0);
-    const { data, error } = await supabase
-      .from('generations')
-      .select('user_id, profiles!inner(email, full_name), count')
-      .gte('created_at', today.toISOString())
-      .order('count', { ascending: false })
-      .limit(5);
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    logger.error('Get high usage users error:', error.message);
-    return [];
   }
 }
 
@@ -322,11 +324,37 @@ async function getHighUsageUsers(threshold = 50) {
 
 async function getAllUserEmails() {
   try {
-    const { data, error } = await supabase.from('profiles').select('email, full_name');
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('email, full_name');
+
     if (error) throw error;
-    return data;
+    return data || [];
   } catch (error) {
     logger.error('Get all users error:', error.message);
+    return [];
+  }
+}
+
+// ============================================
+// PROACTIVE SUGGESTIONS
+// ============================================
+
+async function getInactiveUsers(days = 7) {
+  try {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+
+    const { data, error } = await supabase
+      .from('generations')
+      .select('user_id')
+      .lt('created_at', cutoff.toISOString())
+      .limit(10);
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    logger.error('Get inactive users error:', error.message);
     return [];
   }
 }
@@ -348,7 +376,6 @@ module.exports = {
   getPaymentById,
   approvePayment,
   rejectPayment,
-  getInactiveUsers,
-  getHighUsageUsers,
   getAllUserEmails,
+  getInactiveUsers,
 };
