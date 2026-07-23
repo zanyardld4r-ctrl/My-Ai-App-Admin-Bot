@@ -1,11 +1,10 @@
-const { getStats, getPendingPayments, getInactiveUsers, getHighUsageUsers } = require('../services/supabase');
+const { getStats, getPendingPayments, getInactiveUsers } = require('../services/supabase');
 const BADINI = require('../i18n/badini');
 const { ADMIN_TELEGRAM_ID } = require('../middleware/auth');
 const logger = require('../utils/logger');
 
 /**
  * Send proactive AI suggestions to admin
- * Runs periodically
  */
 async function sendProactiveSuggestions(bot) {
   try {
@@ -29,7 +28,7 @@ async function sendProactiveSuggestions(bot) {
 }
 
 /**
- * Send notification for new user registration
+ * Notify admin of new user registration
  */
 async function notifyNewUser(bot, userData) {
   try {
@@ -41,14 +40,14 @@ async function notifyNewUser(bot, userData) {
       .replace('{id}', userData.id);
 
     await bot.sendMessage(ADMIN_TELEGRAM_ID, message, { parse_mode: 'Markdown' });
-    logger.info(`New user notification sent: ${userData.email}`);
+    logger.info(`New user notification: ${userData.email}`);
   } catch (error) {
     logger.error('Notify new user error:', error.message);
   }
 }
 
 /**
- * Send notification for new payment
+ * Notify admin of new payment request
  */
 async function notifyNewPayment(bot, paymentData) {
   try {
@@ -61,7 +60,7 @@ async function notifyNewPayment(bot, paymentData) {
       .replace('{paymentId}', paymentData.id);
 
     await bot.sendMessage(ADMIN_TELEGRAM_ID, message, { parse_mode: 'Markdown' });
-    logger.info(`New payment notification sent: ${paymentData.id}`);
+    logger.info(`New payment notification: ${paymentData.id}`);
   } catch (error) {
     logger.error('Notify new payment error:', error.message);
   }
