@@ -1,12 +1,5 @@
-[build]
-  builder = "nixpacks"
-  buildCommand = "npm install --production=false"
-
 [deploy]
   startCommand = "npm start"
   restartPolicyType = "ALWAYS"
   numReplicas = 1
 
-[service]
-  healthcheckPath = "/"
-  healthcheckTimeout = 10
