@@ -1,4 +1,12 @@
 const winston = require('winston');
+const path = require('path');
+const fs = require('fs');
+
+// Ensure logs directory exists
+const logsDir = path.join(__dirname, '..', '..', 'logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
 
 const logger = winston.createLogger({
   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
@@ -13,12 +21,18 @@ const logger = winston.createLogger({
       format: winston.format.combine(
         winston.format.colorize(),
         winston.format.printf(({ timestamp, level, message, ...meta }) => {
-          return `${timestamp} [${level}]: ${message} ${Object.keys(meta).length ? JSON.stringify(meta) : ''}`;
+          const metaStr = Object.keys(meta).length > 1 ? ' ' + JSON.stringify(meta) : '';
+          return `${timestamp} [${level}]: ${message}${metaStr}`;
         })
       ),
     }),
-    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'logs/combined.log' }),
+    new winston.transports.File({
+      filename: path.join(logsDir, 'error.log'),
+      level: 'error',
+    }),
+    new winston.transports.File({
+      filename: path.join(logsDir, 'combined.log'),
+    }),
   ],
 });
 
