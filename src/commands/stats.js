@@ -6,7 +6,7 @@ const logger = require('../utils/logger');
 async function handleStats(bot, msg) {
   const chatId = msg.chat.id;
 
-  bot.sendMessage(chatId, BADINI.general.loading, { parse_mode: 'Markdown' });
+  await bot.sendMessage(chatId, BADINI.general.loading, { parse_mode: 'Markdown' });
 
   const stats = await getStats();
 
@@ -18,6 +18,7 @@ async function handleStats(bot, msg) {
   const hours = Math.floor(uptime / 3600);
   const minutes = Math.floor((uptime % 3600) / 60);
   const seconds = Math.floor(uptime % 60);
+  const uptimeStr = `${hours}ک ${minutes}خ ${seconds}چ`;
 
   let message = BADINI.stats.header;
   message += BADINI.stats.totalUsers.replace('{count}', stats.totalUsers);
@@ -28,11 +29,11 @@ async function handleStats(bot, msg) {
   message += BADINI.stats.todayGenerations.replace('{count}', stats.todayGenerations);
   message += BADINI.stats.todayNewUsers.replace('{count}', stats.todayNewUsers);
   message += BADINI.stats.revenue.replace('{amount}', stats.revenue);
-  message += BADINI.stats.dbStatus.replace('{status}', '🟢 باشه');
-  message += BADINI.stats.botUptime.replace('{uptime}', `${hours}ک ${minutes}خ ${seconds}چ`);
+  message += BADINI.stats.dbStatus.replace('{status}', '🟢 باشە');
+  message += BADINI.stats.botUptime.replace('{uptime}', uptimeStr);
 
-  bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-  logger.info(`Stats requested by admin @${msg.from.username}`);
+  await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+  logger.info(`Stats viewed by admin @${msg.from.username}`);
 }
 
 module.exports = withAdmin(handleStats);
