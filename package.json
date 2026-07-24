@@ -1,30 +1,24 @@
 {
   "name": "aivision-admin-bot",
   "version": "1.0.0",
-  "description": "24/7 Telegram Admin Bot for AI-Vision SaaS Platform - Badini Kurdish",
-  "main": "src/bot.js",
+  "private": true,
+  "description": "Elite Private Executive Console for AI-Vision Administration - Badini Kurdish",
   "scripts": {
-    "start": "node src/bot.js",
-    "dev": "nodemon src/bot.js"
-  },
-  "keywords": [
-    "telegram-bot",
-    "supabase",
-    "admin-dashboard",
-    "kurdish-badini"
-  ],
-  "author": "Zaniyar Al-Mzurii",
-  "license": "MIT",
-  "engines": {
-    "node": ">=18.0.0"
+    "dev": "tsx watch src/bot.ts",
+    "build": "tsc",
+    "start": "node dist/bot.js",
+    "webhook": "tsx src/webhooks/server.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.47.2",
     "dotenv": "16.4.5",
-    "node-telegram-bot-api": "0.66.0",
+    "grammy": "1.30.0",
+    "hono": "4.0.8",
     "winston": "3.14.2"
   },
   "devDependencies": {
-    "nodemon": "3.1.7"
+    "@types/node": "20.14.0",
+    "tsx": "4.16.0",
+    "typescript": "5.5.0"
   }
 }
